@@ -1,0 +1,102 @@
+services:
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: yassen_hamdy_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/rules:/etc/prometheus/rules
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--web.enable-lifecycle"
+    networks:
+      - yassen_hamdy_monitoring
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: yassen_hamdy_alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml.template:/etc/alertmanager/alertmanager.yml.template:ro
+      - ./alertmanager/entrypoint.sh:/entrypoint.sh:ro
+    environment:
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-your_app_password_here}
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    networks:
+      - yassen_hamdy_monitoring
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: yassen_hamdy_node_exporter
+    ports:
+      - "9100:9100"
+    networks:
+      - yassen_hamdy_monitoring
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:2.9.4
+    container_name: yassen_hamdy_loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki/loki.yml:/etc/loki/local-config.yaml
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - yassen_hamdy_monitoring
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:2.9.4
+    container_name: yassen_hamdy_promtail
+    volumes:
+      - ./promtail/promtail.yml:/etc/promtail/config.yml
+      - ./logs:/var/log/yassen_hamdy
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - yassen_hamdy_monitoring
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.3.3
+    container_name: yassen_hamdy_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=yassen_hamdy
+      - GF_USERS_DEFAULT_THEME=dark
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+      - yassen_hamdy_monitoring
+    depends_on:
+      - prometheus
+      - loki
+    restart: unless-stopped
+
+  demo1-app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: yassen_hamdy_demo1_app
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./logs/app:/var/log/yassen_hamdy/app
+    networks:
+      - yassen_hamdy_monitoring
+    restart: unless-stopped
+
+networks:
+  yassen_hamdy_monitoring:
+    driver: bridge

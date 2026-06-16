@@ -1,0 +1,12 @@
+groups:
+  - name: yassen_hamdy_recording_rules
+    interval: 30s
+    rules:
+      # Recording Rule: pre-compute 5-minute request rate per job
+      # Reduces query load on dashboards and alerts
+      - record: job:http_requests:rate5m
+        expr: sum(rate(http_server_requests_seconds_count[5m])) by (job)
+
+      # Recording Rule: pre-compute CPU usage percentage per instance
+      - record: instance:node_cpu_usage:percent
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)

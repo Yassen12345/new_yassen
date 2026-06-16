@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: yassen_hamdy_dashboards
+    orgId: 1
+    folder: yassen_hamdy
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

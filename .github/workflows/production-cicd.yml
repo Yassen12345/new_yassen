@@ -1,0 +1,101 @@
+name: Production CI/CD - yassen_hamdy
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Docker image tag to build and deploy'
+        required: false
+        default: 'latest'
+
+concurrency:
+  group: yassen_hamdy-production-cicd
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: '11'
+  MAVEN_OPTS: '-Xmx1024m'
+  IMAGE_NAME: demo1
+  CD_REPO: Hassan-Eid-Hassan/java-cd
+
+jobs:
+  build-and-deploy:
+    name: Build, Push & Update CD
+    runs-on: ubuntu-latest
+    environment: yassen_hamdy
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build JAR with Maven
+        run: mvn clean package -DskipTests -B
+
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo1-jar-${{ github.run_number }}
+          path: target/demo1-0.0.1-SNAPSHOT.jar
+          retention-days: 30
+
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [ "${{ github.event.inputs.image_tag }}" != "" ] && [ "${{ github.event.inputs.image_tag }}" != "latest" ]; then
+            echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.run_number }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/demo1:${{ steps.tag.outputs.tag }}
+            ${{ secrets.DOCKER_USERNAME }}/demo1:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Checkout CD repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CD_REPO }}
+          token: ${{ secrets.CD_REPO_TOKEN }}
+          path: cd-repo
+
+      - name: Update CD repo with new image tag
+        run: |
+          cd cd-repo
+          sed -i "s|image: .*/demo1:.*|image: ${{ secrets.DOCKER_USERNAME }}/demo1:${{ steps.tag.outputs.tag }}|g" yassen_hamdy/deployment.yaml
+          git config user.name "yassen_hamdy CI"
+          git config user.email "yassen.hamdy.ci@github.com"
+          git add yassen_hamdy/deployment.yaml
+          git diff --staged --quiet || git commit -m "chore(yassen_hamdy): update demo1 image to ${{ steps.tag.outputs.tag }}"
+          git push
+
+      - name: Deployment summary
+        run: |
+          echo "## yassen_hamdy Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| JAR Artifact | demo1-jar-${{ github.run_number }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Image | ${{ secrets.DOCKER_USERNAME }}/demo1:${{ steps.tag.outputs.tag }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| CD Repo Updated | ${{ env.CD_REPO }} |" >> $GITHUB_STEP_SUMMARY
