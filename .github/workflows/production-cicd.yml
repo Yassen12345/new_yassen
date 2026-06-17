@@ -81,15 +81,15 @@ jobs:
           token: ${{ secrets.CD_REPO_TOKEN }}
           path: cd-repo
 
-      - name: Update CD repo with new image tag
-        run: |
-          cd cd-repo
-          sed -i "s|image: .*/demo1:.*|image: ${{ secrets.DOCKER_USERNAME }}/demo1:${{ steps.tag.outputs.tag }}|g" yassen_hamdy/deployment.yaml
-          git config user.name "yassen_hamdy CI"
-          git config user.email "yassen.hamdy.ci@github.com"
-          git add yassen_hamdy/deployment.yaml
-          git diff --staged --quiet || git commit -m "chore(yassen_hamdy): update demo1 image to ${{ steps.tag.outputs.tag }}"
-          git push
+#      - name: Update CD repo with new image tag
+#        run: |
+#          cd cd-repo
+#          sed -i "s|image: .*/demo1:.*|image: ${{ secrets.DOCKER_USERNAME }}/demo1:${{ steps.tag.outputs.tag }}|g" yassen_hamdy/deployment.yaml
+#          git config user.name "yassen_hamdy CI"
+#          git config user.email "yassen.hamdy.ci@github.com"
+#          git add yassen_hamdy/deployment.yaml
+#          git diff --staged --quiet || git commit -m "chore(yassen_hamdy): update demo1 image to ${{ steps.tag.outputs.tag }}"
+#          git push
 
       - name: Deployment summary
         run: |
